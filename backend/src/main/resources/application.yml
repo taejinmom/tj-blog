@@ -5,6 +5,7 @@ spring:
     password: blog1234
     driver-class-name: org.postgresql.Driver
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
     show-sql: true
