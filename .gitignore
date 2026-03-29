@@ -1,0 +1,27 @@
+# Java
+*.class
+*.jar
+*.war
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Node
+node_modules/
+dist/
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Docker
+docker/jenkins/data/
+docker/postgres/data/
+
+# OS
+.DS_Store
+Thumbs.db
