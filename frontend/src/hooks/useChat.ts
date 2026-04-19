@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { messageApi } from '../services/api';
+import { messageApi } from '../api/chat';
 import { wsService } from '../services/websocket';
 import type { ChatMessage, ReadUpdate } from '../types';
 
 export function useChat(
   roomId: number | null,
   userId: number | null,
-  subscribeToRoom: (roomId: number, onMessage: (msg: ChatMessage) => void) => () => void,
+  subscribeToRoom: (
+    roomId: number,
+    onMessage: (msg: ChatMessage) => void,
+  ) => () => void,
   wsSendMessage: (roomId: number, content: string, senderId: number) => void,
-  connected: boolean
+  connected: boolean,
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,33 +32,38 @@ export function useChat(
     setMessages([]);
     setLoading(true);
 
-    messageApi.getMessages(roomId).then((res) => {
-      setMessages(res.data);
-      setLoading(false);
-      markLastAsRead(res.data);
-    }).catch(() => setLoading(false));
+    messageApi
+      .getMessages(roomId)
+      .then((data) => {
+        setMessages(data);
+        setLoading(false);
+        markLastAsRead(data);
+      })
+      .catch(() => setLoading(false));
 
-    // 메시지 구독
+    // Subscribe to new messages
     unsubRef.current?.();
     unsubRef.current = subscribeToRoom(roomId, (msg) => {
       setMessages((prev) => {
         const updated = [...prev, msg];
         if (msg.senderId !== userId) {
-          messageApi.markAsRead(msg.id, userId!).catch(() => {});
+          messageApi.markAsRead(msg.id, userId).catch(() => {});
         }
         return updated;
       });
     });
 
-    // 읽음 업데이트 구독
+    // Subscribe to read updates
     readUnsubRef.current?.();
     const readDest = `/topic/chat-room/${roomId}/read`;
     wsService.subscribe(readDest, (msg) => {
       const update: ReadUpdate = JSON.parse(msg.body);
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === update.messageId ? { ...m, unreadCount: update.unreadCount } : m
-        )
+          m.id === update.messageId
+            ? { ...m, unreadCount: update.unreadCount }
+            : m,
+        ),
       );
     });
     readUnsubRef.current = () => wsService.unsubscribe(readDest);
@@ -66,6 +74,7 @@ export function useChat(
       readUnsubRef.current?.();
       readUnsubRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, userId, subscribeToRoom, connected]);
 
   const sendMessage = useCallback(
@@ -73,7 +82,7 @@ export function useChat(
       if (!roomId || !userId || !content.trim()) return;
       wsSendMessage(roomId, content.trim(), userId);
     },
-    [roomId, userId, wsSendMessage]
+    [roomId, userId, wsSendMessage],
   );
 
   return { messages, loading, sendMessage };

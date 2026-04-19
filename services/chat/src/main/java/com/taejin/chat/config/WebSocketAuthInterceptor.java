@@ -1,6 +1,7 @@
 package com.taejin.chat.config;
 
 import com.taejin.chat.security.JwtTokenProvider;
+import com.taejin.chat.service.UserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -25,6 +26,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     private static final String PREFIX = "Bearer ";
 
     private final JwtTokenProvider tokenProvider;
+    private final UserProvisioningService userProvisioningService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -44,6 +46,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             }
 
             Long userId = tokenProvider.getUserId(token);
+            String email = tokenProvider.getEmail(token);
+            userProvisioningService.provisionIfMissing(userId, email);
+
             List<String> roles = tokenProvider.getRoles(token);
 
             List<SimpleGrantedAuthority> authorities = roles.stream()

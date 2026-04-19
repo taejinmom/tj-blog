@@ -52,6 +52,30 @@ public class ChatMessageService {
         return ChatMessageResponse.from(saved, unreadCount);
     }
 
+    /**
+     * 시스템 메시지(JOIN/LEAVE 등)를 저장하고 채팅방에 즉시 브로드캐스트한다.
+     * 발신자(해당 유저)는 자동 읽음 처리.
+     */
+    @Transactional
+    public ChatMessageResponse saveSystemMessage(Long roomId, Long userId, String content,
+                                                  ChatMessage.MessageType type) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new IllegalArgumentException("ChatRoom not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        ChatMessage saved = messageRepository.save(ChatMessage.builder()
+                .chatRoom(room).sender(user).content(content).type(type).build());
+        readReceiptRepository.save(ReadReceipt.builder().message(saved).user(user).build());
+
+        int totalMembers = memberRepository.countByChatRoomId(roomId);
+        int unreadCount = Math.max(0, totalMembers - 1);
+        ChatMessageResponse response = ChatMessageResponse.from(saved, unreadCount);
+
+        messagingTemplate.convertAndSend("/topic/chat-room/" + roomId, response);
+        return response;
+    }
+
     @Transactional(readOnly = true)
     public List<ChatMessageResponse> getMessages(Long roomId, int page, int size) {
         int totalMembers = memberRepository.countByChatRoomId(roomId);
@@ -65,31 +89,36 @@ public class ChatMessageService {
                 .getContent();
     }
 
+    /**
+     * messageId 이하의 모든 메시지를 userId의 읽음으로 처리하고, 실제로 새로 읽음
+     * 처리된 메시지에 대해서만 /topic/chat-room/{roomId}/read 로 ReadUpdate 브로드캐스트.
+     * "message N 읽음" 의미가 "1..N 까지 전부 읽음" 이 되도록 cascade.
+     */
     @Transactional
     public void markAsRead(Long messageId, Long userId) {
-        if (readReceiptRepository.existsByMessageIdAndUserId(messageId, userId)) {
-            return;
-        }
-        ChatMessage message = messageRepository.findById(messageId)
+        ChatMessage target = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        Long roomId = target.getChatRoom().getId();
 
-        ReadReceipt receipt = ReadReceipt.builder()
-                .message(message)
-                .user(user)
-                .build();
-        readReceiptRepository.save(receipt);
+        List<ChatMessage> candidates = messageRepository
+                .findByChatRoomIdAndIdLessThanEqualOrderByIdAsc(roomId, messageId);
+        int totalMembers = memberRepository.countByChatRoomId(roomId);
 
-        // 읽음 처리 후 업데이트된 unreadCount를 해당 채팅방에 브로드캐스트
-        int totalMembers = memberRepository.countByChatRoomId(message.getChatRoom().getId());
-        int readCount = readReceiptRepository.countByMessageId(messageId);
-        int unreadCount = Math.max(0, totalMembers - readCount);
+        for (ChatMessage msg : candidates) {
+            if (readReceiptRepository.existsByMessageIdAndUserId(msg.getId(), userId)) {
+                continue;
+            }
+            readReceiptRepository.save(ReadReceipt.builder().message(msg).user(user).build());
 
-        messagingTemplate.convertAndSend(
-                "/topic/chat-room/" + message.getChatRoom().getId() + "/read",
-                new ReadUpdate(messageId, unreadCount)
-        );
+            int readCount = readReceiptRepository.countByMessageId(msg.getId());
+            int unreadCount = Math.max(0, totalMembers - readCount);
+            messagingTemplate.convertAndSend(
+                    "/topic/chat-room/" + roomId + "/read",
+                    new ReadUpdate(msg.getId(), unreadCount)
+            );
+        }
     }
 
     @lombok.Getter

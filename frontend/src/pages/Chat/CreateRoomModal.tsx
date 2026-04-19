@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { chatRoomApi } from '../services/api';
+import { chatRoomApi } from '../../api/chat';
+import { useAuth } from '../../context/AuthContext';
 
 interface Props {
   onClose: () => void;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function CreateRoomModal({ onClose, onCreated }: Props) {
+  const { user } = useAuth();
   const [name, setName] = useState('');
   const [type, setType] = useState('GROUP');
   const [loading, setLoading] = useState(false);
@@ -14,14 +16,17 @@ export default function CreateRoomModal({ onClose, onCreated }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
 
     setLoading(true);
     setError('');
 
     try {
-      const userId = Number(localStorage.getItem('userId'));
-      await chatRoomApi.createRoom({ name: name.trim(), type, creatorId: userId });
+      await chatRoomApi.createRoom({
+        name: name.trim(),
+        type,
+        creatorId: user.id,
+      });
       onCreated();
     } catch {
       setError('채팅방 생성에 실패했습니다.');

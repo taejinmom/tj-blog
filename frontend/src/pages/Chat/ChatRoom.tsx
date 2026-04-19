@@ -1,39 +1,70 @@
 import { useEffect, useState } from 'react';
-import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
-import { chatRoomApi } from '../services/api';
-import { useChat } from '../hooks/useChat';
+import { useParams, useNavigate } from 'react-router-dom';
+import { chatRoomApi } from '../../api/chat';
+import { useChat } from '../../hooks/useChat';
+import { wsService } from '../../services/websocket';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
-import type { ChatMessage, ChatRoom as ChatRoomType, User } from '../types';
+import type { ChatMessage, ChatRoom as ChatRoomType, ChatMember } from '../../types';
 
-interface OutletContext {
-  subscribeToRoom: (roomId: number, onMessage: (msg: ChatMessage) => void) => () => void;
+interface Props {
+  subscribeToRoom: (
+    roomId: number,
+    onMessage: (msg: ChatMessage) => void,
+  ) => () => void;
   sendMessage: (roomId: number, content: string, senderId: number) => void;
   userId: number;
   connected: boolean;
 }
 
-export default function ChatRoom() {
+export default function ChatRoom({
+  subscribeToRoom,
+  sendMessage: wsSend,
+  userId,
+  connected,
+}: Props) {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const { subscribeToRoom, sendMessage: wsSend, userId, connected } = useOutletContext<OutletContext>();
   const [room, setRoom] = useState<ChatRoomType | null>(null);
-  const [members, setMembers] = useState<User[]>([]);
+  const [members, setMembers] = useState<ChatMember[]>([]);
   const [showMembers, setShowMembers] = useState(false);
 
   const numRoomId = roomId ? Number(roomId) : null;
-  const { messages, loading, sendMessage } = useChat(numRoomId, userId, subscribeToRoom, wsSend, connected);
+  const { messages, loading, sendMessage } = useChat(
+    numRoomId,
+    userId,
+    subscribeToRoom,
+    wsSend,
+    connected,
+  );
 
   useEffect(() => {
     if (!numRoomId) return;
 
-    chatRoomApi.getRoom(numRoomId).then((res) => setRoom(res.data)).catch(() => {});
+    chatRoomApi.getRoom(numRoomId).then(setRoom).catch(() => {});
 
-    // join 후 멤버 목록 갱신
-    chatRoomApi.joinRoom(numRoomId, userId)
-      .then(() => chatRoomApi.getMembers(numRoomId).then((res) => setMembers(res.data)))
-      .catch(() => chatRoomApi.getMembers(numRoomId).then((res) => setMembers(res.data)).catch(() => {}));
+    // join and refresh members
+    chatRoomApi
+      .joinRoom(numRoomId, userId)
+      .then(() =>
+        chatRoomApi.getMembers(numRoomId).then(setMembers).catch(() => {}),
+      )
+      .catch(() =>
+        chatRoomApi.getMembers(numRoomId).then(setMembers).catch(() => {}),
+      );
   }, [numRoomId, userId]);
+
+  // 실시간: 다른 사용자 join/leave 시 서버가 members 토픽으로 브로드캐스트
+  useEffect(() => {
+    if (!numRoomId || !connected) return;
+    const dest = `/topic/chat-room/${numRoomId}/members`;
+    wsService.subscribe(dest, (m) => {
+      const data = JSON.parse(m.body) as { memberCount: number; members: ChatMember[] };
+      setRoom((prev) => (prev ? { ...prev, memberCount: data.memberCount } : prev));
+      setMembers(data.members);
+    });
+    return () => wsService.unsubscribe(dest);
+  }, [numRoomId, connected]);
 
   if (!roomId) {
     return (
@@ -64,7 +95,10 @@ export default function ChatRoom() {
             onClick={() => {
               if (!numRoomId) return;
               if (confirm('채팅방을 나가시겠습니까?')) {
-                chatRoomApi.leaveRoom(numRoomId, userId).then(() => navigate('/chat')).catch(() => {});
+                chatRoomApi
+                  .leaveRoom(numRoomId, userId)
+                  .then(() => navigate('/chat'))
+                  .catch(() => {});
               }
             }}
             className="p-2 rounded-lg hover:bg-red-500/20 text-dark-muted hover:text-red-400 transition-colors"
@@ -80,10 +114,10 @@ export default function ChatRoom() {
             className="p-2 rounded-lg hover:bg-dark-hover text-dark-muted hover:text-dark-text transition-colors"
             title="멤버 목록"
           >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </button>
         </div>
       </div>

@@ -36,6 +36,6 @@ public class ChatMessage {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum MessageType {
-        TEXT, CHAT, ENTER, LEAVE
+        TEXT, CHAT, ENTER, JOIN, LEAVE, SYSTEM
     }
 }

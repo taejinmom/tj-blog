@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import type { Notification } from '../types';
+import type { ChatNotification } from '../../types';
 
 interface Props {
-  notifications: Notification[];
+  notifications: ChatNotification[];
   onDismiss: (id: string) => void;
 }
 

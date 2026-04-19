@@ -1,5 +1,6 @@
 package com.taejin.chat.security;
 
+import com.taejin.chat.service.UserProvisioningService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String PREFIX = "Bearer ";
 
     private final JwtTokenProvider tokenProvider;
+    private final UserProvisioningService userProvisioningService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -35,7 +37,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = resolveToken(request);
             if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
                 Long userId = tokenProvider.getUserId(token);
+                String email = tokenProvider.getEmail(token);
                 List<String> roles = tokenProvider.getRoles(token);
+
+                // auth-service 가입은 있지만 chat 의 users 테이블에는 아직 없는 경우 자동 생성
+                userProvisioningService.provisionIfMissing(userId, email);
 
                 List<SimpleGrantedAuthority> authorities = roles.stream()
                         .map(SimpleGrantedAuthority::new)

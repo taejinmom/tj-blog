@@ -38,6 +38,8 @@ services:
     build: ./services/blog
     container_name: blog-backend
     restart: unless-stopped
+    ports:
+      - "8080:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/blogdb
       SPRING_DATASOURCE_USERNAME: blog
@@ -53,6 +55,8 @@ services:
     build: ./services/auth
     container_name: auth-backend
     restart: unless-stopped
+    ports:
+      - "8082:8082"
     environment:
       SERVER_PORT: 8082
       SPRING_PROFILES_ACTIVE: postgres
@@ -70,6 +74,8 @@ services:
     build: ./services/chat
     container_name: chat-backend
     restart: unless-stopped
+    ports:
+      - "8081:8081"
     environment:
       SERVER_PORT: 8081
       DB_HOST: platform-db

@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { chatRoomApi } from '../services/api';
+import { chatRoomApi } from '../../api/chat';
+import { wsService } from '../../services/websocket';
 import CreateRoomModal from './CreateRoomModal';
-import type { ChatRoom } from '../types';
+import type { ChatRoom } from '../../types';
 
-export default function ChatRoomList() {
+interface Props {
+  connected: boolean;
+}
+
+export default function ChatRoomList({ connected }: Props) {
   const navigate = useNavigate();
   const { roomId } = useParams();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -12,17 +17,29 @@ export default function ChatRoomList() {
   const [loading, setLoading] = useState(true);
 
   const fetchRooms = () => {
-    chatRoomApi.getRooms().then((res) => {
-      setRooms(res.data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    chatRoomApi
+      .getRooms()
+      .then((data) => {
+        setRooms(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchRooms();
-    const interval = setInterval(fetchRooms, 10000);
+    // Polling은 WS 연결이 없을 때의 fallback. 긴 주기로 줄임.
+    const interval = setInterval(fetchRooms, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // 실시간: 방 생성/입장/퇴장/삭제 시 서버가 /topic/chat-rooms 로 브로드캐스트
+  useEffect(() => {
+    if (!connected) return;
+    const dest = '/topic/chat-rooms';
+    wsService.subscribe(dest, () => fetchRooms());
+    return () => wsService.unsubscribe(dest);
+  }, [connected]);
 
   const handleRoomCreated = () => {
     setShowModal(false);

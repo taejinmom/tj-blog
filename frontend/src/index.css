@@ -6,4 +6,29 @@
   --color-bg-dark: #1e1e2e;
   --color-surface-dark: #2a2a3e;
   --color-border-dark: #3a3a4e;
+
+  /* Chat dark palette */
+  --color-dark-bg: #1e1e2e;
+  --color-dark-sidebar: #2a2a3e;
+  --color-dark-card: #2a2a3e;
+  --color-dark-hover: #3a3a4e;
+  --color-dark-border: #3a3a4e;
+  --color-dark-accent: #5865f2;
+  --color-dark-text: #e4e4e7;
+  --color-dark-muted: #8a8aa3;
+  --color-dark-sent: #5865f2;
+  --color-dark-received: #3a3a4e;
+
+  --animate-slide-in: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

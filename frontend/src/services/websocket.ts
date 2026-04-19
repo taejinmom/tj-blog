@@ -1,13 +1,20 @@
-import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
 class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
 
-  connect(onConnect?: () => void, onError?: (error: string) => void): void {
+  connect(
+    accessToken: string,
+    onConnect?: () => void,
+    onError?: (error: string) => void,
+  ): void {
     this.client = new Client({
       webSocketFactory: () => new SockJS('/ws'),
+      connectHeaders: {
+        Authorization: `Bearer ${accessToken}`,
+      },
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
