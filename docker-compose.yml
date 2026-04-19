@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  db:
+  platform-db:
     image: postgres:15
-    container_name: blog-db
+    container_name: platform-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: blogdb
@@ -13,68 +13,98 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - blog-network
+      - platform-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U blog -d blogdb"]
+      test: ["CMD-SHELL", "pg_isready -U blog"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: blog-backend
+  platform-redis:
+    image: redis:7-alpine
+    container_name: platform-redis
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "6379:6379"
+    networks:
+      - platform-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  blog-backend:
+    build: ./services/blog
+    container_name: blog-backend
+    restart: unless-stopped
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/blogdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/blogdb
       SPRING_DATASOURCE_USERNAME: blog
       SPRING_DATASOURCE_PASSWORD: blog1234
     depends_on:
-      db:
+      platform-db:
         condition: service_healthy
     networks:
-      - blog-network
+      - platform-network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: blog-frontend
+  auth-backend:
+    build: ./services/auth
+    container_name: auth-backend
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8082
+      SPRING_PROFILES_ACTIVE: postgres
+      POSTGRES_URL: jdbc:postgresql://platform-db:5432/authdb
+      POSTGRES_USER: blog
+      POSTGRES_PASSWORD: blog1234
+    depends_on:
+      platform-db:
+        condition: service_healthy
+    networks:
+      - platform-network
+
+  chat-backend:
+    build: ./services/chat
+    container_name: chat-backend
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8081
+      DB_HOST: platform-db
+      DB_PORT: 5432
+      DB_NAME: chatdb
+      DB_USERNAME: blog
+      DB_PASSWORD: blog1234
+      REDIS_HOST: platform-redis
+      REDIS_PORT: 6379
+    depends_on:
+      platform-db:
+        condition: service_healthy
+      platform-redis:
+        condition: service_healthy
+    networks:
+      - platform-network
+
+  platform-frontend:
+    build: ./frontend
+    container_name: platform-frontend
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - backend
+      - blog-backend
+      - auth-backend
+      - chat-backend
     networks:
-      - blog-network
-
-  jenkins:
-    build:
-      context: ./docker/jenkins
-      dockerfile: Dockerfile
-    container_name: blog-jenkins
-    restart: unless-stopped
-    ports:
-      - "9090:8080"
-      - "50000:50000"
-    environment:
-      JENKINS_OPTS: --httpPort=8080
-    volumes:
-      - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - blog-network
+      - platform-network
 
 volumes:
   postgres_data:
-  jenkins_home:
 
 networks:
-  blog-network:
+  platform-network:
     driver: bridge
