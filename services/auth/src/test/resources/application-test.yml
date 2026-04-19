@@ -1,0 +1,47 @@
+spring:
+  # 테스트는 H2 인메모리를 직접 지정한다 (application-h2.yml 의 update 가 아니라 create-drop).
+  # main 의 profiles.active 설정을 덮어써서 h2/postgres 프로파일이 끼어들지 않도록 한다.
+  datasource:
+    url: jdbc:h2:mem:authdb-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: false
+  h2:
+    console:
+      enabled: false
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-client-id
+            client-secret: test-google-client-secret
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/api/auth/oauth2/callback/google"
+          github:
+            client-id: test-github-client-id
+            client-secret: test-github-client-secret
+            scope:
+              - read:user
+              - user:email
+            redirect-uri: "{baseUrl}/api/auth/oauth2/callback/github"
+
+app:
+  jwt:
+    secret: test-secret-test-secret-test-secret-test-secret-1234567890
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 1209600000
+    issuer: auth-service-test
+
+logging:
+  level:
+    org.springframework.security: WARN
+    com.taejin.authservice: INFO
