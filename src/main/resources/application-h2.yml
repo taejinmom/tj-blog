@@ -1,0 +1,18 @@
+# H2 인메모리 프로파일 (기본값)
+# - 데이터는 프로세스 종료 시 전부 사라진다. 영속 저장 용도로 쓰지 말 것.
+# - MODE=PostgreSQL 로 두어 SQL 방언이 postgres 와 최대한 유사하게 동작하도록 한다.
+#   → 추후 postgres 프로파일로 넘어갈 때의 마찰을 줄이기 위함.
+spring:
+  datasource:
+    url: jdbc:h2:mem:authdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
