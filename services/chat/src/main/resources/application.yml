@@ -25,6 +25,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-change-me-change-me-change-me-change-me-1234}
+
 management:
   endpoints:
     web:

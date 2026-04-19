@@ -1,23 +1,79 @@
-# PRD Phase 1: 인프라 통합
+# Phase 1: 인프라 통합
 
-## 1. 개요
+> **Status**: Done ✅
+> **Author**: taejin
+> **Created**: 2026-04-19
+> **Depends on**: None
 
-portfolio-blog 모노레포의 3개 서비스(blog, auth, chat)를 **Docker Compose 하나로 실행**할 수 있는 인프라를 구성한다.
+---
 
-### 목표
-- `docker compose up` 한 번으로 전체 플랫폼 실행
-- 각 서비스는 독립 컨테이너로 분리
-- PostgreSQL 1대에 DB 3개 분리 (blogdb, authdb, chatdb)
-- Nginx가 단일 진입점으로 각 서비스에 라우팅
+## Context
 
-### 비목표
+portfolio-blog, auth-service, tj-chat-service 3개의 독립 프로젝트가 각각 별도의 docker-compose를 갖고 따로 실행되고 있다.
+현재 문제:
+
+- 서비스마다 별도의 PostgreSQL 컨테이너를 띄워야 한다
+- 프론트엔드가 blog, chat 각각 따로 존재한다
+- 3개 서비스를 동시에 실행하려면 수동으로 각각 docker compose up 해야 한다
+- 포트 충돌 관리를 수동으로 해야 한다
+
+## Goals
+
+- `docker compose up` 한 번으로 전체 플랫폼을 실행한다
+- 각 서비스는 독립 컨테이너로 분리한다
+- PostgreSQL 1대에 DB 3개를 분리한다 (blogdb, authdb, chatdb)
+- Nginx가 단일 진입점(:80)으로 경로별 라우팅한다
+
+## Non-goals
+
 - 서비스 코드 변경 (인증 연동 등은 Phase 2에서 진행)
 - 프론트엔드 통합 (Phase 3에서 진행)
 - CI/CD 파이프라인 변경
 
 ---
 
-## 2. 최종 아키텍처
+## User Stories
+
+### US-1: 개발자의 원커맨드 실행
+```
+AS A 개발자
+I WANT TO docker compose up 한 번으로 전체 플랫폼을 실행할 수 있다
+SO THAT 개발 환경 세팅에 시간을 쓰지 않는다
+```
+**Acceptance Criteria**
+- `docker compose up --build` → 6개 컨테이너(db, redis, blog, auth, chat, frontend) 모두 기동
+- 각 컨테이너 STATUS가 `Up` 또는 `healthy`
+- 기존 docker volume이 없는 상태에서도 정상 기동 (init.sql로 DB 자동 생성)
+
+### US-2: Nginx 통합 라우팅
+```
+AS A 프론트엔드
+I WANT TO 단일 호스트(:80)로 모든 API를 호출할 수 있다
+SO THAT 서비스별 포트를 알 필요 없다
+```
+**Acceptance Criteria**
+- `GET http://localhost/api/posts` → blog-backend 200 응답
+- `POST http://localhost/api/auth/signup` → auth-backend 응답
+- `GET http://localhost/api/chat-rooms` → chat-backend 200 응답
+- `ws://localhost/ws` → WebSocket 연결 성공
+- `GET http://localhost/` → React SPA 로딩 (index.html)
+
+### US-3: 서비스 독립성
+```
+AS A 개발자
+I WANT TO 개별 서비스를 재시작해도 다른 서비스에 영향이 없다
+SO THAT 서비스별 독립 배포가 가능하다
+```
+**Acceptance Criteria**
+- `docker compose restart blog-backend` → auth, chat 서비스 정상 유지
+- `docker compose restart auth-backend` → blog, chat 서비스 정상 유지
+- `docker compose restart chat-backend` → blog, auth 서비스 정상 유지
+
+---
+
+## Technical Design
+
+### 아키텍처
 
 ```
                     ┌─────────────────────────────┐
@@ -28,7 +84,7 @@ portfolio-blog 모노레포의 3개 서비스(blog, auth, chat)를 **Docker Comp
             ┌──────────┘    ┌─────┘    ┌─────┘
             ▼               ▼          ▼
      ┌─────────────┐ ┌──────────┐ ┌──────────┐
-     │ blog (:8080)│ │auth(:8082│ │chat(:8081│
+     │ blog (:8080)│ │auth(:8082)│ │chat(:8081)│
      │ Spring Boot │ │Spr. Boot │ │Spr. Boot │
      └──────┬──────┘ └────┬─────┘ └──┬───┬───┘
             │              │          │   │
@@ -43,9 +99,7 @@ portfolio-blog 모노레포의 3개 서비스(blog, auth, chat)를 **Docker Comp
           └──────────────┘
 ```
 
----
-
-## 3. 컨테이너 구성
+### 컨테이너 구성
 
 | 서비스 | 컨테이너명 | 이미지/빌드 | 내부 포트 | 외부 포트 | 의존성 |
 |--------|-----------|------------|----------|----------|--------|
@@ -58,337 +112,165 @@ portfolio-blog 모노레포의 3개 서비스(blog, auth, chat)를 **Docker Comp
 
 > 백엔드 포트는 외부 노출하지 않음. Nginx를 통해서만 접근.
 
----
+### Task 1: PostgreSQL 초기화 스크립트
 
-## 4. 작업 목록
-
-### 4.1 PostgreSQL 초기화 스크립트
-
-**파일:** `docker/postgres/init.sql`
+**신규 파일:** `docker/postgres/init.sql`
 
 ```sql
 CREATE DATABASE authdb;
 CREATE DATABASE chatdb;
--- blogdb는 docker-compose 환경변수로 자동 생성
+-- blogdb는 POSTGRES_DB 환경변수로 자동 생성
 ```
 
-PostgreSQL 컨테이너의 `/docker-entrypoint-initdb.d/`에 마운트하여 최초 실행 시 DB 자동 생성.
+- PostgreSQL 컨테이너의 `/docker-entrypoint-initdb.d/`에 마운트
+- volume이 비어있는 최초 실행 시에만 init 스크립트 실행됨
+- 기존 volume이 있으면 스킵되므로, DB 추가 시 `docker compose down -v` 필요
 
-### 4.2 auth-service 설정 변경
+### Task 2: auth-service 설정 변경
 
-**변경 사항:**
-- 포트: 8080 → **8082** (blog와 충돌 방지)
-- DB: H2 → PostgreSQL (authdb)
-- `application.yml`에 PostgreSQL 프로파일 활성화
-
-**환경변수:**
-```yaml
-SERVER_PORT: 8082
-SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/authdb
-SPRING_DATASOURCE_USERNAME: blog
-SPRING_DATASOURCE_PASSWORD: blog1234
-SPRING_JPA_HIBERNATE_DDL_AUTO: update
+**변경 파일:**
+```
+services/auth/
+├── Dockerfile                                  # 신규: 멀티스테이지 빌드
+└── src/main/resources/
+    └── application.yml                         # 수정: 포트 8082
 ```
 
-### 4.3 chat-service 설정 변경
+**구현 상세:**
 
-**변경 사항:**
-- DB 호스트: `db` → `platform-db`
-- Redis 호스트: `redis` → `platform-redis`
+1. Dockerfile 작성 (blog, chat과 동일 구조)
+   - Build: `gradle:8.7-jdk17` → `gradle bootJar`
+   - Run: `eclipse-temurin:17-jre` → `java -jar app.jar`
 
-**환경변수:**
-```yaml
-DB_HOST: platform-db
-DB_PORT: 5432
-DB_NAME: chatdb
-DB_USERNAME: blog
-DB_PASSWORD: blog1234
-REDIS_HOST: platform-redis
-REDIS_PORT: 6379
+2. `application.yml` 포트 변경
+   ```yaml
+   server:
+     port: ${SERVER_PORT:8082}
+   ```
+
+3. docker-compose 환경변수로 PostgreSQL 프로파일 활성화
+   ```yaml
+   SPRING_PROFILES_ACTIVE: postgres
+   POSTGRES_URL: jdbc:postgresql://platform-db:5432/authdb
+   POSTGRES_USER: blog
+   POSTGRES_PASSWORD: blog1234
+   ```
+
+### Task 3: blog/chat 서비스 설정 변경
+
+**변경 파일:**
+```
+services/blog/src/main/resources/application.yml   # DB URL 환경변수 대응
+services/chat/src/main/resources/application.yml   # 포트 8081, DB/Redis 호스트명 확인
 ```
 
-### 4.4 blog-service 설정 변경
+**구현 상세:**
 
-**변경 사항:**
-- DB 호스트: `db` → `platform-db`
+1. blog `application.yml` — 하드코딩 DB URL을 환경변수 대응으로 변경
+   ```yaml
+   spring:
+     datasource:
+       url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/blogdb}
+       username: ${SPRING_DATASOURCE_USERNAME:blog}
+       password: ${SPRING_DATASOURCE_PASSWORD:blog1234}
+   ```
 
-**환경변수:**
-```yaml
-SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/blogdb
-SPRING_DATASOURCE_USERNAME: blog
-SPRING_DATASOURCE_PASSWORD: blog1234
-```
+2. chat `application.yml` — 포트 변경 (이미 환경변수 대응 되어있음)
+   ```yaml
+   server:
+     port: ${SERVER_PORT:8081}
+   ```
 
-### 4.5 auth-service Dockerfile 작성
+### Task 4: 통합 docker-compose.yml
 
-**파일:** `services/auth/Dockerfile`
+**변경 파일:** 루트 `docker-compose.yml` (전체 교체)
 
-현재 auth-service에는 Dockerfile이 없음. 다른 서비스(blog, chat)의 Dockerfile을 참고하여 작성.
+- 기존 blog 단독 구성 → 6개 서비스 통합 구성
+- healthcheck 기반 의존성 관리
+- 단일 네트워크 (`platform-network`)
+- 단일 PostgreSQL volume
 
-```dockerfile
-FROM gradle:8.7-jdk17 AS build
-WORKDIR /app
-COPY . .
-RUN gradle bootJar --no-daemon
+### Task 5: Nginx 설정 변경
 
-FROM eclipse-temurin:17-jre
-WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
-EXPOSE 8082
-ENTRYPOINT ["java", "-jar", "app.jar"]
-```
+**변경 파일:** `docker/nginx/default.conf` (전체 교체)
 
-### 4.6 통합 docker-compose.yml
-
-**파일:** 루트 `docker-compose.yml` (기존 파일 교체)
-
-**서비스 정의:**
-
-```yaml
-version: '3.8'
-
-services:
-  platform-db:
-    image: postgres:15
-    container_name: platform-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: blogdb
-      POSTGRES_USER: blog
-      POSTGRES_PASSWORD: blog1234
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - platform-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U blog"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  platform-redis:
-    image: redis:7-alpine
-    container_name: platform-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    networks:
-      - platform-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  auth-backend:
-    build: ./services/auth
-    container_name: auth-backend
-    restart: unless-stopped
-    environment:
-      SERVER_PORT: 8082
-      SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/authdb
-      SPRING_DATASOURCE_USERNAME: blog
-      SPRING_DATASOURCE_PASSWORD: blog1234
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_PROFILES_ACTIVE: postgres
-    depends_on:
-      platform-db:
-        condition: service_healthy
-    networks:
-      - platform-network
-
-  blog-backend:
-    build: ./services/blog
-    container_name: blog-backend
-    restart: unless-stopped
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/blogdb
-      SPRING_DATASOURCE_USERNAME: blog
-      SPRING_DATASOURCE_PASSWORD: blog1234
-    depends_on:
-      platform-db:
-        condition: service_healthy
-    networks:
-      - platform-network
-
-  chat-backend:
-    build: ./services/chat
-    container_name: chat-backend
-    restart: unless-stopped
-    environment:
-      DB_HOST: platform-db
-      DB_PORT: 5432
-      DB_NAME: chatdb
-      DB_USERNAME: blog
-      DB_PASSWORD: blog1234
-      REDIS_HOST: platform-redis
-      REDIS_PORT: 6379
-    depends_on:
-      platform-db:
-        condition: service_healthy
-      platform-redis:
-        condition: service_healthy
-    networks:
-      - platform-network
-
-  platform-frontend:
-    build: ./frontend
-    container_name: platform-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - blog-backend
-      - auth-backend
-      - chat-backend
-    networks:
-      - platform-network
-
-volumes:
-  postgres_data:
-
-networks:
-  platform-network:
-    driver: bridge
-```
-
-### 4.7 Nginx 설정 변경
-
-**파일:** `docker/nginx/default.conf`
-
-```nginx
-upstream blog-api {
-    server blog-backend:8080;
-}
-
-upstream auth-api {
-    server auth-backend:8082;
-}
-
-upstream chat-api {
-    server chat-backend:8081;
-}
-
-server {
-    listen 80;
-
-    # React SPA
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Blog API
-    location /api/posts {
-        proxy_pass http://blog-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /api/todos {
-        proxy_pass http://blog-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # Auth API
-    location /api/auth {
-        proxy_pass http://auth-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /api/users {
-        proxy_pass http://auth-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /api/admin {
-        proxy_pass http://auth-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # Chat API
-    location /api/chat-rooms {
-        proxy_pass http://chat-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /api/messages {
-        proxy_pass http://chat-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    location /api/service-info {
-        proxy_pass http://chat-api;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # WebSocket (Chat)
-    location /ws {
-        proxy_pass http://chat-api;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_read_timeout 86400;
-    }
-}
-```
+- 기존: `location /api/` → blog-backend 단일 프록시
+- 변경: 경로별 upstream 분기
+  - `/api/posts`, `/api/todos` → blog-backend:8080
+  - `/api/auth`, `/api/users`, `/api/admin` → auth-backend:8082
+  - `/api/chat-rooms`, `/api/messages`, `/api/service-info` → chat-backend:8081
+  - `/ws` → chat-backend:8081 (WebSocket upgrade)
+  - `/` → React SPA (try_files)
 
 ---
 
-## 5. 파일 변경 요약
+## Test Scenarios
+
+### 컨테이너 기동
+
+| # | 시나리오 | 명령어 | 기대 결과 |
+|---|---------|--------|----------|
+| 1 | 전체 빌드 & 실행 | `docker compose up --build` | 6개 컨테이너 모두 Up |
+| 2 | DB healthcheck | `docker compose ps` | platform-db: healthy |
+| 3 | Redis healthcheck | `docker compose ps` | platform-redis: healthy |
+| 4 | 클린 상태 기동 | `docker compose down -v && docker compose up` | init.sql로 authdb, chatdb 생성됨 |
+
+### API 라우팅 (Nginx 경유)
+
+| # | 시나리오 | 요청 | 기대 결과 |
+|---|---------|------|----------|
+| 1 | Blog 글 조회 | `GET http://localhost/api/posts` | 200 |
+| 2 | Auth 회원가입 | `POST http://localhost/api/auth/signup` (JSON body) | 200/201 |
+| 3 | Auth 로그인 | `POST http://localhost/api/auth/login` (JSON body) | 200 (JWT 발급) |
+| 4 | Chat 채팅방 목록 | `GET http://localhost/api/chat-rooms` | 200 |
+| 5 | Frontend SPA | `GET http://localhost/` | 200 (index.html) |
+| 6 | SPA 라우팅 | `GET http://localhost/todos` | 200 (index.html, try_files) |
+| 7 | WebSocket | `ws://localhost/ws` | STOMP 연결 성공 |
+
+### 서비스 독립성
+
+| # | 시나리오 | 명령어 | 기대 결과 |
+|---|---------|--------|----------|
+| 1 | blog만 재시작 | `docker compose restart blog-backend` | auth, chat API 정상 응답 |
+| 2 | auth만 재시작 | `docker compose restart auth-backend` | blog, chat API 정상 응답 |
+| 3 | chat만 재시작 | `docker compose restart chat-backend` | blog, auth API 정상 응답 |
+
+---
+
+## Implementation Order
+
+```
+Task 1 (init.sql)  ──→  Task 4 (docker-compose.yml)  ──→  빌드 & 실행 테스트
+Task 2 (auth 설정) ──┘         ↑
+Task 3 (blog/chat) ──────────┘
+Task 5 (nginx)     ──────────┘
+```
+
+- Task 1~3, 5는 독립적이므로 병렬 진행 가능
+- Task 4는 모든 설정이 확정된 후 작성
+- 최종 테스트는 `docker compose down -v && docker compose up --build`
+
+---
+
+## File Changes Summary
 
 | 파일 | 작업 |
 |------|------|
-| `docker-compose.yml` | 전체 교체 (통합 구성) |
-| `docker/postgres/init.sql` | **신규** (authdb, chatdb 생성) |
-| `docker/nginx/default.conf` | 전체 교체 (멀티 서비스 라우팅) |
+| `docker-compose.yml` | 전체 교체 (6개 서비스 통합) |
+| `docker/postgres/init.sql` | **신규** (authdb, chatdb 자동 생성) |
+| `docker/nginx/default.conf` | 전체 교체 (경로별 멀티 서비스 라우팅) |
 | `services/auth/Dockerfile` | **신규** (멀티스테이지 빌드) |
-| `services/auth/src/main/resources/application.yml` | 포트 8082, PostgreSQL 설정 추가 |
-| `services/chat/src/main/resources/application.yml` | DB/Redis 호스트명 환경변수 대응 확인 |
-| `services/blog/src/main/resources/application.yml` | DB 호스트명 환경변수 대응 확인 |
+| `services/auth/src/main/resources/application.yml` | 포트 8082 변경 |
+| `services/chat/src/main/resources/application.yml` | 포트 8081 변경 |
+| `services/blog/src/main/resources/application.yml` | DB URL 환경변수 대응 |
 
 ---
 
-## 6. 성공 기준
+## Risks & Mitigations
 
-1. `docker compose up --build` 로 전체 서비스가 정상 기동된다
-2. PostgreSQL에 blogdb, authdb, chatdb 3개 DB가 생성된다
-3. 각 백엔드 healthcheck가 통과한다:
-   - `curl http://localhost/api/posts` → blog 응답
-   - `curl http://localhost/api/auth/signup` → auth 응답
-   - `curl http://localhost/api/chat-rooms` → chat 응답
-   - `ws://localhost/ws` → WebSocket 연결 성공
-4. 각 서비스를 개별 재시작해도 다른 서비스에 영향 없음
-5. 프론트엔드(React SPA)가 Nginx를 통해 정상 로딩됨
-
----
-
-## 7. 주의사항
-
-- auth-service의 `ddl-auto: update`는 개발 단계에서만 사용. 운영 시 Flyway 마이그레이션 전환 필요.
-- DB 비밀번호(`blog1234`)는 개발용. 운영 환경에서는 `.env` 파일 또는 시크릿 관리 도구 사용.
-- Jenkins 컨테이너는 이번 Phase에서 제외. 기존 설정 유지하되 docker-compose에 포함하지 않음 (필요 시 별도 profile로 추가).
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| 기존 PostgreSQL volume이 있으면 init.sql 스킵 | authdb, chatdb 미생성 → auth, chat 기동 실패 | `docker compose down -v`로 volume 초기화 후 재시작 |
+| auth-service의 `ddl-auto: update`로 운영 스키마 변경 | 의도하지 않은 스키마 변경 | 개발 단계에서만 사용, 운영 시 Flyway 전환 |
+| DB 비밀번호 하드코딩 | 보안 취약 | 개발 전용, 운영 시 `.env` 파일 또는 시크릿 매니저 사용 |
+| Jenkins 컨테이너 제외 | CI/CD 중단 | 기존 설정 보존, 필요 시 docker-compose profile로 추가 |

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   platform-db:
     image: postgres:15
@@ -44,6 +42,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://platform-db:5432/blogdb
       SPRING_DATASOURCE_USERNAME: blog
       SPRING_DATASOURCE_PASSWORD: blog1234
+      JWT_SECRET: ${JWT_SECRET:-change-me-change-me-change-me-change-me-change-me-1234}
     depends_on:
       platform-db:
         condition: service_healthy
@@ -60,6 +59,7 @@ services:
       POSTGRES_URL: jdbc:postgresql://platform-db:5432/authdb
       POSTGRES_USER: blog
       POSTGRES_PASSWORD: blog1234
+      JWT_SECRET: ${JWT_SECRET:-change-me-change-me-change-me-change-me-change-me-1234}
     depends_on:
       platform-db:
         condition: service_healthy
@@ -79,6 +79,7 @@ services:
       DB_PASSWORD: blog1234
       REDIS_HOST: platform-redis
       REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-change-me-change-me-change-me-change-me-1234}
     depends_on:
       platform-db:
         condition: service_healthy
