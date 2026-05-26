@@ -4,6 +4,7 @@ export interface Post {
   title: string;
   content: string;
   category: string;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -12,6 +13,26 @@ export interface PostRequest {
   title: string;
   content: string;
   category: string;
+  tags?: string[];
+}
+
+/** 서버 페이지네이션 응답 (blog PageResponse 와 1:1). */
+export interface Page<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
+export interface Comment {
+  id: number;
+  postId: number;
+  authorId: number;
+  authorName: string;
+  content: string;
+  createdAt: string;
 }
 
 // ===== Todo =====
@@ -78,6 +99,7 @@ export interface ChatRoom {
   memberCount: number;
   createdAt: string;
   lastMessage?: string;
+  lastMessageAt?: string;
   unreadCount?: number;
 }
 

@@ -86,7 +86,9 @@ export default function ChatRoomList({ connected }: Props) {
               </div>
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs text-dark-muted truncate">
-                  {room.type === 'GROUP' ? '그룹 채팅' : '1:1 채팅'}
+                  {room.lastMessage
+                    ? room.lastMessage
+                    : room.type === 'GROUP' ? '그룹 채팅' : '1:1 채팅'}
                 </span>
                 {room.unreadCount && room.unreadCount > 0 ? (
                   <span className="bg-dark-accent text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center flex-shrink-0">

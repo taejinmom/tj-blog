@@ -23,10 +23,15 @@ public class ChatRoomService {
     private final ReadReceiptRepository readReceiptRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    /** 방 목록 + 사용자별 최근 메시지/안읽음 수. */
     @Transactional(readOnly = true)
-    public List<ChatRoomResponse> findAll() {
+    public List<ChatRoomResponse> findAll(Long userId) {
         return chatRoomRepository.findAll().stream()
-                .map(ChatRoomResponse::from)
+                .map(room -> {
+                    var last = chatMessageRepository.findFirstByChatRoomIdOrderByCreatedAtDesc(room.getId());
+                    long unread = chatMessageRepository.countUnread(room.getId(), userId);
+                    return ChatRoomResponse.withMeta(room, last, unread);
+                })
                 .toList();
     }
 

@@ -9,6 +9,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +49,9 @@ public class ChatMessageService {
         int totalMembers = memberRepository.countByChatRoomId(room.getId());
         int readCount = 1; // 발신자
         int unreadCount = Math.max(0, totalMembers - readCount);
+
+        // 방 목록(최근 메시지/안읽음 배지)이 실시간 갱신되도록 알림
+        messagingTemplate.convertAndSend("/topic/chat-rooms", Map.of("event", "message"));
 
         return ChatMessageResponse.from(saved, unreadCount);
     }

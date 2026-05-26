@@ -35,8 +35,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String email = jwtTokenProvider.getEmail(token);
             List<String> roles = jwtTokenProvider.getRoles(token);
 
+            // 토큰의 roles 는 이미 "ROLE_" 접두사를 포함할 수 있으므로 중복 부착을 방지한다.
+            // (예: "ROLE_ADMIN" 이 "ROLE_ROLE_ADMIN" 이 되어 hasRole("ADMIN") 이 깨지던 문제)
             List<SimpleGrantedAuthority> authorities = roles.stream()
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                    .map(role -> new SimpleGrantedAuthority(role.startsWith("ROLE_") ? role : "ROLE_" + role))
                     .toList();
 
             UsernamePasswordAuthenticationToken authentication =

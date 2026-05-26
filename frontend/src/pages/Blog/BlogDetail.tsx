@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { postApi } from '../../api/client';
 import type { Post } from '../../types';
+import CommentSection from './CommentSection';
 
 export default function BlogDetail() {
   const { id } = useParams<{ id: string }>();
@@ -45,6 +46,20 @@ export default function BlogDetail() {
         <div className="prose dark:prose-invert max-w-none">
           <ReactMarkdown>{post.content}</ReactMarkdown>
         </div>
+
+        {post.tags?.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-8">
+            {post.tags.map(t => (
+              <button
+                key={t}
+                onClick={() => navigate(`/?tag=${encodeURIComponent(t)}`)}
+                className="px-2.5 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-primary/10 hover:text-primary"
+              >
+                #{t}
+              </button>
+            ))}
+          </div>
+        )}
       </article>
 
       <div className="flex gap-3 mt-10 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -61,6 +76,8 @@ export default function BlogDetail() {
           Delete
         </button>
       </div>
+
+      <CommentSection postId={post.id} />
     </div>
   );
 }

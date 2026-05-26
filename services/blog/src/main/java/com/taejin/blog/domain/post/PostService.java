@@ -1,6 +1,8 @@
 package com.taejin.blog.domain.post;
 
 import com.taejin.blog.exception.NotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,28 @@ public class PostService {
 
     public List<Post> findAll() {
         return postRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * 페이지네이션 + 검색(q) + 카테고리/태그 필터.
+     * 우선순위: tag → q(키워드) → category → 전체.
+     * null 파라미터를 쿼리에 넘기지 않도록 분기한다(Postgres 타입추론 오류 방지).
+     */
+    public Page<Post> list(String q, String category, String tag, Pageable pageable) {
+        if (hasText(tag)) {
+            return postRepository.findByTag(tag.trim(), pageable);
+        }
+        if (hasText(q)) {
+            return postRepository.searchByKeyword(q.trim(), pageable);
+        }
+        if (hasText(category)) {
+            return postRepository.findByCategory(category.trim(), pageable);
+        }
+        return postRepository.findAll(pageable);
+    }
+
+    private static boolean hasText(String s) {
+        return s != null && !s.isBlank();
     }
 
     public Post findById(Long id) {

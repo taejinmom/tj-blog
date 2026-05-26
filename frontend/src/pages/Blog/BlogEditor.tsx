@@ -10,6 +10,7 @@ export default function BlogEditor() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -18,18 +19,24 @@ export default function BlogEditor() {
       setTitle(post.title);
       setContent(post.content);
       setCategory(post.category);
+      setTagsInput((post.tags ?? []).join(', '));
     });
   }, [id]);
+
+  // "a, b, c" → ["a","b","c"] (공백/중복 제거)
+  const parseTags = (raw: string): string[] =>
+    Array.from(new Set(raw.split(',').map(t => t.trim()).filter(Boolean)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const tags = parseTags(tagsInput);
     try {
       if (isEdit) {
-        await postApi.update(Number(id), { title, content, category });
+        await postApi.update(Number(id), { title, content, category, tags });
         navigate(`/posts/${id}`);
       } else {
-        const post = await postApi.create({ title, content, category });
+        const post = await postApi.create({ title, content, category, tags });
         navigate(`/posts/${post.id}`);
       }
     } catch (err) {
@@ -66,6 +73,17 @@ export default function BlogEditor() {
             onChange={e => setCategory(e.target.value)}
             required
             placeholder="e.g. Tech, DevOps, React"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags</label>
+          <input
+            type="text"
+            value={tagsInput}
+            onChange={e => setTagsInput(e.target.value)}
+            placeholder="쉼표로 구분 — 예: spring, jpa, docker"
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
           />
         </div>
