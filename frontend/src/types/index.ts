@@ -99,6 +99,7 @@ export interface ChatRoom {
   memberCount: number;
   createdAt: string;
   lastMessage?: string;
+  lastMessageAt?: string;
   unreadCount?: number;
 }
 

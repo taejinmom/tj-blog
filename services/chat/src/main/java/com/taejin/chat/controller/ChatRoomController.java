@@ -5,6 +5,7 @@ import com.taejin.chat.service.ChatRoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +18,9 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
 
     @GetMapping
-    public ResponseEntity<List<ChatRoomResponse>> findAll() {
-        return ResponseEntity.ok(chatRoomService.findAll());
+    public ResponseEntity<List<ChatRoomResponse>> findAll(Authentication auth) {
+        Long userId = Long.valueOf(auth.getName());
+        return ResponseEntity.ok(chatRoomService.findAll(userId));
     }
 
     @PostMapping
