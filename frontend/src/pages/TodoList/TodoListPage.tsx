@@ -30,8 +30,10 @@ interface ServiceLink {
 
 const SERVICE_LINKS: Record<string, ServiceLink> = {
   '채팅': {
-    url: 'http://localhost:3000',
-    healthUrl: 'http://localhost:8081/api/service-info',
+    // 채팅은 이 SPA 의 /chat 라우트에 통합돼 있다 (별도 포트가 아님).
+    // 헬스체크는 같은 오리진의 /api/service-info 로 (prod=nginx, dev=vite 프록시가 chat 으로 라우팅).
+    url: '/chat',
+    healthUrl: '/api/service-info',
     label: 'TJ Chat',
   },
   // 향후 추가되는 서비스들

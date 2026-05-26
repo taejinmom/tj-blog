@@ -1,5 +1,6 @@
 package com.taejin.blog.domain.post;
 
+import com.taejin.blog.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,7 @@ public class PostService {
 
     public Post findById(Long id) {
         return postRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Post not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Post not found: " + id));
     }
 
     public List<Post> findByCategory(String category) {

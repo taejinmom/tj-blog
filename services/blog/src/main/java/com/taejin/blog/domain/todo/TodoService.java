@@ -1,5 +1,6 @@
 package com.taejin.blog.domain.todo;
 
+import com.taejin.blog.exception.NotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,7 @@ public class TodoService {
 
     public TodoItem findById(Long id) {
         return todoRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("TodoItem not found: " + id));
+                .orElseThrow(() -> new NotFoundException("TodoItem not found: " + id));
     }
 
     public List<TodoItem> findByPhase(String phase) {
