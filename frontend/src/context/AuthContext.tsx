@@ -159,6 +159,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// AuthProvider(컴포넌트)와 useAuth(훅)를 같은 파일에 두기 위해 fast-refresh 규칙만 예외 처리.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
