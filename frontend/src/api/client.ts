@@ -1,12 +1,21 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import type { Post, PostRequest, TodoItem, TodoRequest } from '../types';
+import type { Page, Post, PostRequest, TodoItem, TodoRequest } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
 });
 
+export interface PostListParams {
+  page?: number;        // 0-based
+  size?: number;
+  q?: string;           // 제목/내용 검색
+  category?: string;
+  tag?: string;
+}
+
 export const postApi = {
-  getAll: () => api.get<Post[]>('/posts').then(r => r.data),
+  list: (params: PostListParams = {}) =>
+    api.get<Page<Post>>('/posts', { params }).then(r => r.data),
   getById: (id: number) => api.get<Post>(`/posts/${id}`).then(r => r.data),
   getByCategory: (category: string) => api.get<Post[]>(`/posts/category/${category}`).then(r => r.data),
   create: (data: PostRequest) => api.post<Post>('/posts', data).then(r => r.data),
