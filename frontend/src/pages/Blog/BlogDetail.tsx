@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { postApi } from '../../api/client';
 import type { Post } from '../../types';
+import CommentSection from './CommentSection';
 
 export default function BlogDetail() {
   const { id } = useParams<{ id: string }>();
@@ -75,6 +76,8 @@ export default function BlogDetail() {
           Delete
         </button>
       </div>
+
+      <CommentSection postId={post.id} />
     </div>
   );
 }

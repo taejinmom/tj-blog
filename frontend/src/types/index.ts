@@ -26,6 +26,15 @@ export interface Page<T> {
   last: boolean;
 }
 
+export interface Comment {
+  id: number;
+  postId: number;
+  authorId: number;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
 // ===== Todo =====
 export type TodoStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
 

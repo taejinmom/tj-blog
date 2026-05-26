@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import type { Page, Post, PostRequest, TodoItem, TodoRequest } from '../types';
+import type { Comment, Page, Post, PostRequest, TodoItem, TodoRequest } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -21,6 +21,13 @@ export const postApi = {
   create: (data: PostRequest) => api.post<Post>('/posts', data).then(r => r.data),
   update: (id: number, data: PostRequest) => api.put<Post>(`/posts/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/posts/${id}`),
+};
+
+export const commentApi = {
+  list: (postId: number) => api.get<Comment[]>(`/posts/${postId}/comments`).then(r => r.data),
+  create: (postId: number, content: string) =>
+    api.post<Comment>(`/posts/${postId}/comments`, { content }).then(r => r.data),
+  delete: (id: number) => api.delete(`/comments/${id}`),
 };
 
 export const todoApi = {
